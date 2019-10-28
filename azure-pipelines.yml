@@ -1,0 +1,35 @@
+# Build Docker image for this app using Azure Pipelines
+# http://docs.microsoft.com/azure/devops/pipelines/languages/docker?view=vsts
+pool:
+  vmImage: 'Ubuntu 16.04'
+
+variables:
+  buildConfiguration: 'Release'
+  # define two more variables dockerId and dockerPassword in the build pipeline in UI
+
+steps:
+- task: DotNetCoreInstaller@0
+  inputs:
+    version: '2.2.100-preview2-009404'
+- script: |
+    dotnet build --configuration $(buildConfiguration)
+    dotnet publish --configuration $(buildConfiguration) --output out
+    docker build -f Dockerfile -t $imageName .
+    docker login -u $(dockerId) -p $pswd $(dockerServer)
+    docker push $imageName
+  env:
+    pswd: $(dockerPassword)
+    imageName: '$(imageName):$(Build.BuildId)'
+
+- task: qetza.replacetokens.replacetokens-task.replacetokens@3
+  displayName: 'Replace tokens Build.BuildId'
+  inputs:
+    rootDirectory: '$(System.DefaultWorkingDirectory)'
+    targetFiles: 'docker-compose-template.yml'
+    tokenPrefix: '#{'
+    tokenSuffix: '}#'
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact'
+  inputs:
+    PathtoPublish: docker-compose-template.yml
